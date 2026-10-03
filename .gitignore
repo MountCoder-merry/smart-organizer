@@ -1,0 +1,16 @@
+node_modules/
+dist/
+build/
+target/
+.pnpm-store/
+src-tauri/target/
+src-tauri/gen/
+tauri.dev.local.conf.json
+*.log
+.DS_Store
+.env
+.env.*
+.idea/
+.vscode/
+.cargo/registry/
+.cargo/git/
