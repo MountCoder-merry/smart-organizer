@@ -3,6 +3,7 @@ mod errors;
 mod filesystem;
 mod history;
 mod organizer;
+mod persistence;
 mod rule_engine;
 mod rule_store;
 mod rules;

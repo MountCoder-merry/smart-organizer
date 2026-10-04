@@ -45,4 +45,15 @@ Keep the product focused on safe, explainable local organization. Do not add bro
 
 ## Git Commit
 
-Pending maintainer commit: `feat: apply saved move rules to organization plans`.
+Previous iteration commit: `feat: apply saved move rules to organization plans`.
+
+## Second Iteration
+
+- Replaced delete-before-rename persistence in history and rule storage with a shared synced temporary-file writer.
+- Retain the previous JSON as a `.bak` until replacement succeeds and recover from a missing or invalid primary file.
+- Added two persistence unit tests; Rust coverage now passes 14 tests.
+- Re-ran frontend tests, typecheck, build, Rust format/test checks, and `git diff --check`.
+
+Remaining P1 work is now closed in the current backlog. The next recommended item is the P2 end-to-end organization workflow test.
+
+Current second-iteration commit: `fix: make local JSON persistence recoverable`.

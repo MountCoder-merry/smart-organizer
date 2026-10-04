@@ -24,15 +24,11 @@ fn history_path(app: &AppHandle) -> Result<PathBuf, AppError> {
 
 pub fn load(app: &AppHandle) -> Result<Vec<OperationTransaction>, AppError> {
     let path = history_path(app)?;
-    if !path.exists() {
-        return Ok(Vec::new());
-    }
-    let bytes = fs::read(&path).map_err(|error| AppError::PersistenceFailed {
-        message: format!("Unable to read transaction history: {error}"),
-    })?;
-    serde_json::from_slice(&bytes).map_err(|error| AppError::PersistenceFailed {
-        message: format!("Transaction history is invalid: {error}"),
-    })
+    crate::persistence::load_json(&path)
+        .map_err(|error| AppError::PersistenceFailed {
+            message: format!("Unable to read transaction history: {error}"),
+        })
+        .map(|history| history.unwrap_or_default())
 }
 
 pub fn record(
@@ -40,11 +36,7 @@ pub fn record(
     transaction: OperationTransaction,
 ) -> Result<Vec<OperationTransaction>, AppError> {
     let path = history_path(app)?;
-    let mut transactions = if path.exists() {
-        load(app)?
-    } else {
-        Vec::new()
-    };
+    let mut transactions = load(app)?;
     if let Some(existing) = transactions
         .iter_mut()
         .find(|item| item.id == transaction.id)
@@ -58,17 +50,10 @@ pub fn record(
         serde_json::to_vec_pretty(&transactions).map_err(|error| AppError::PersistenceFailed {
             message: format!("Unable to encode transaction history: {error}"),
         })?;
-    let temporary_path = path.with_extension("json.tmp");
-    fs::write(&temporary_path, encoded).map_err(|error| AppError::PersistenceFailed {
-        message: format!("Unable to write transaction history: {error}"),
-    })?;
-    if path.exists() {
-        fs::remove_file(&path).map_err(|error| AppError::PersistenceFailed {
-            message: format!("Unable to replace transaction history: {error}"),
-        })?;
-    }
-    fs::rename(&temporary_path, &path).map_err(|error| AppError::PersistenceFailed {
-        message: format!("Unable to finalize transaction history: {error}"),
+    crate::persistence::write_json_atomic(&path, &encoded).map_err(|error| {
+        AppError::PersistenceFailed {
+            message: format!("Unable to write transaction history safely: {error}"),
+        }
     })?;
     Ok(transactions)
 }

@@ -7,6 +7,7 @@ Scoring: Impact, Urgency, Confidence, Effort, and Risk are each 1–5. Effort an
 - Enabled persisted move rules now participate in plan generation with first-match precedence and safe relative destinations.
 - Unsupported rename rules are rejected explicitly instead of being saved as no-ops.
 - Added Rust coverage for rule precedence and updated the README and project state.
+- History and rule writes now use synced temporary files, recoverable backups, and fallback loading.
 
 ## P1 — Apply saved rules when generating a plan
 
@@ -20,7 +21,8 @@ Scoring: Impact, Urgency, Confidence, Effort, and Risk are each 1–5. Effort an
 
 ## P1 — Make local JSON persistence crash-safe
 
-- **Problem:** History and rules write a temporary file, delete the existing file, then rename; a crash between deletion and rename can lose local records.
+- **Status:** Completed in this iteration; the remaining risk is filesystem-specific behavior that should be exercised in release environments.
+- **Problem:** History and rules previously wrote a temporary file, deleted the existing file, then renamed; a crash between deletion and rename could lose local records.
 - **Why:** These records are the user's audit trail and undo index.
 - **User impact:** History or saved rules may disappear after an interrupted write.
 - **Plan:** Use a durable replace strategy with flush/sync where supported, retain the old file until the replacement succeeds, and test interrupted/invalid-file recovery.

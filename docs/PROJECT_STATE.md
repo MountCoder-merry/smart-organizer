@@ -18,6 +18,7 @@ The implemented path is Home → choose a folder → scan direct child files →
 - Planner classifies known extensions, skips `Other`, rejects forged paths, and creates conflict-safe destination names.
 - Filesystem engine validates root containment, never overwrites an existing destination, records partial failures, and supports undo.
 - History and rules are stored as JSON in the Tauri application data directory.
+- JSON writes use a synced temporary file, a recoverable backup, and fallback loading when the primary is missing or invalid.
 - Rule parsing remains a two-example seam, rename rules are rejected until their semantics are implemented, and Settings remains a placeholder.
 
 ## Architecture and Constraints
@@ -26,7 +27,7 @@ The implemented path is Home → choose a folder → scan direct child files →
 
 ## Verification Baseline
 
-`pnpm test` passes 3 frontend tests; `pnpm typecheck` passes; `pnpm build` passes; `cargo test --manifest-path src-tauri/Cargo.toml` passes 12 Rust tests. There is no repository-level CI currently running these checks, no lint script, no end-to-end test, and no release automation.
+`pnpm test` passes 3 frontend tests; `pnpm typecheck` passes; `pnpm build` passes; `cargo test --manifest-path src-tauri/Cargo.toml` passes 14 Rust tests. There is no repository-level CI currently running these checks, no lint script, no end-to-end test, and no release automation.
 
 ## Known Gaps
 
