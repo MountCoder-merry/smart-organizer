@@ -46,8 +46,15 @@ pub fn get_desktop_folder(app: AppHandle) -> Result<String, AppError> {
 }
 
 #[tauri::command]
-pub fn generate_plan(root: String, scan: ScanResult) -> Result<OrganizationPlan, AppError> {
-    crate::organizer::generate_plan(&root, &scan)
+pub fn generate_plan(
+    root: String,
+    scan: ScanResult,
+    rules: Vec<StructuredRule>,
+) -> Result<OrganizationPlan, AppError> {
+    for rule in &rules {
+        crate::rule_engine::validate_rule(rule)?;
+    }
+    crate::organizer::generate_plan(&root, &scan, &rules)
 }
 
 #[tauri::command]

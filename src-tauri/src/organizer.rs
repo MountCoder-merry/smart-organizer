@@ -6,6 +6,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde::{Deserialize, Serialize};
 
 use crate::errors::AppError;
+use crate::rule_engine::{rule_matches, RuleActionType, StructuredRule};
 use crate::scanner::{FileCategory, ScanResult};
 
 /// A single filesystem change in an organization plan.
@@ -57,7 +58,11 @@ pub struct OrganizationPlan {
 }
 
 /// Build a preview-only plan. No filesystem contents are changed here.
-pub fn generate_plan(root: &str, scan: &ScanResult) -> Result<OrganizationPlan, AppError> {
+pub fn generate_plan(
+    root: &str,
+    scan: &ScanResult,
+    rules: &[StructuredRule],
+) -> Result<OrganizationPlan, AppError> {
     let trimmed = root.trim();
     if trimmed.is_empty() {
         return Err(AppError::InvalidPath {
@@ -81,7 +86,7 @@ pub fn generate_plan(root: &str, scan: &ScanResult) -> Result<OrganizationPlan, 
     let mut planned_destinations = HashSet::new();
 
     for item in &scan.items {
-        if item.is_directory || item.category == FileCategory::Other {
+        if item.is_directory {
             continue;
         }
 
@@ -96,8 +101,21 @@ pub fn generate_plan(root: &str, scan: &ScanResult) -> Result<OrganizationPlan, 
             continue;
         }
 
-        let folder_name = category_folder(item.category);
-        let target_folder = root_path.join(folder_name);
+        let matching_rule = rules.iter().find(|rule| rule_matches(item, rule));
+        let (target_folder, reason) = match matching_rule {
+            Some(rule) if rule.action.action_type == RuleActionType::Move => (
+                root_path.join(rule.action.destination.trim()),
+                format!("Rule: {}", rule.name),
+            ),
+            _ if item.category != FileCategory::Other => {
+                let folder_name = category_folder(item.category);
+                (
+                    root_path.join(folder_name),
+                    format!("Move to {folder_name}"),
+                )
+            }
+            _ => continue,
+        };
         if same_path(source.parent(), Some(&target_folder)) {
             continue;
         }
@@ -116,7 +134,7 @@ pub fn generate_plan(root: &str, scan: &ScanResult) -> Result<OrganizationPlan, 
             operation_type: OperationType::Move,
             source: source_string,
             destination: destination_string,
-            reason: format!("Move to {folder_name}"),
+            reason,
             status: OperationStatus::Pending,
             error: None,
             size_bytes: item.size_bytes,
@@ -333,6 +351,7 @@ mod tests {
                     },
                 ],
             ),
+            &[],
         )
         .expect("plan");
         assert_eq!(plan.operations.len(), 1);
@@ -356,5 +375,44 @@ mod tests {
         let second = unique_destination(&temp.0.join("Images/photo.jpg"), &mut destinations);
         assert_eq!(first, temp.0.join("Images/photo (1).jpg"));
         assert_eq!(second, temp.0.join("Images/photo (2).jpg"));
+    }
+
+    #[test]
+    fn applies_first_matching_move_rule_before_category_fallback() {
+        let temp = TestDir::new();
+        File::create(temp.0.join("Screenshot.png")).expect("screenshot");
+        let rule = crate::rule_engine::StructuredRule {
+            id: "screenshots".to_string(),
+            name: "Screenshots".to_string(),
+            conditions: vec![crate::rule_engine::RuleCondition {
+                field: crate::rule_engine::RuleField::Filename,
+                operator: crate::rule_engine::RuleOperator::Contains,
+                value: "screenshot".to_string(),
+            }],
+            action: crate::rule_engine::RuleAction {
+                action_type: crate::rule_engine::RuleActionType::Move,
+                destination: "Captures".to_string(),
+            },
+            enabled: true,
+        };
+        let plan = generate_plan(
+            temp.0.to_str().expect("path"),
+            &scan(
+                &temp.0,
+                vec![item(&temp.0, "Screenshot.png", FileCategory::Images, 12)],
+            ),
+            &[rule],
+        )
+        .expect("plan");
+
+        assert_eq!(plan.operations.len(), 1);
+        assert_eq!(plan.operations[0].reason, "Rule: Screenshots");
+        assert_eq!(
+            plan.operations[0].destination,
+            temp.0
+                .join("Captures")
+                .join("Screenshot.png")
+                .to_string_lossy()
+        );
     }
 }

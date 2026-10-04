@@ -30,6 +30,7 @@ function formatModified(file: ScannedFile) {
 export function OrganizePage() {
   const {
     selectedFolder,
+    rules,
     setSelectedFolder,
     scanResult,
     isScanning,
@@ -76,7 +77,7 @@ export function OrganizePage() {
     setIsPlanning(true);
     setPlanError(null);
     try {
-      const plan = await generatePlan(selectedFolder, scanResult);
+      const plan = await generatePlan(selectedFolder, scanResult, rules);
       setOrganizationPlan(plan);
       addActivity({ id: `plan-${Date.now()}`, title: "Plan generated", detail: `${plan.summary.operationCount} safe moves are ready to review`, timestamp: "Just now", tone: "success" });
       setActiveView("preview");

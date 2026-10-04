@@ -1,7 +1,10 @@
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use serde::{Deserialize, Serialize};
 
 use crate::errors::AppError;
 use crate::organizer::now_timestamp;
+use crate::scanner::ScannedFile;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -71,6 +74,11 @@ pub fn validate_rule(rule: &StructuredRule) -> Result<(), AppError> {
             message: "At least one condition is required".to_string(),
         });
     }
+    if rule.action.action_type == RuleActionType::Rename {
+        return Err(AppError::InvalidRule {
+            message: "Rename rules are not supported yet; choose Move instead".to_string(),
+        });
+    }
     validate_destination(&rule.action.destination)?;
     for condition in &rule.conditions {
         if condition.value.trim().is_empty() {
@@ -104,6 +112,92 @@ pub fn validate_rule(rule: &StructuredRule) -> Result<(), AppError> {
         }
     }
     Ok(())
+}
+
+/// Evaluate a validated rule without accessing the filesystem.
+pub fn rule_matches(file: &ScannedFile, rule: &StructuredRule) -> bool {
+    rule.enabled
+        && rule
+            .conditions
+            .iter()
+            .all(|condition| condition_matches(file, condition))
+}
+
+fn condition_matches(file: &ScannedFile, condition: &RuleCondition) -> bool {
+    let value = match condition.field {
+        RuleField::Filename => Some(file.name.clone()),
+        RuleField::Extension => file.extension.clone(),
+        RuleField::Category => Some(format_category(file)),
+        RuleField::Size => Some(file.size_bytes.to_string()),
+        RuleField::CreatedAt => file.created_at.clone(),
+        RuleField::ModifiedAt => file.modified_at.clone(),
+    };
+    let Some(value) = value else { return false };
+    let left = value.to_ascii_lowercase();
+    let right = condition.value.trim().to_ascii_lowercase();
+
+    match condition.operator {
+        RuleOperator::Equals => left == right,
+        RuleOperator::Contains => left.contains(&right),
+        RuleOperator::StartsWith => left.starts_with(&right),
+        RuleOperator::EndsWith => left.ends_with(&right),
+        RuleOperator::GreaterThan => value.parse::<u64>().is_ok_and(|number| {
+            condition
+                .value
+                .trim()
+                .parse::<u64>()
+                .is_ok_and(|target| number > target)
+        }),
+        RuleOperator::LessThan => value.parse::<u64>().is_ok_and(|number| {
+            condition
+                .value
+                .trim()
+                .parse::<u64>()
+                .is_ok_and(|target| number < target)
+        }),
+        RuleOperator::OlderThan => age_in_days(&value).is_some_and(|age| {
+            condition
+                .value
+                .trim()
+                .parse::<u64>()
+                .is_ok_and(|days| age > days)
+        }),
+        RuleOperator::NewerThan => age_in_days(&value).is_some_and(|age| {
+            condition
+                .value
+                .trim()
+                .parse::<u64>()
+                .is_ok_and(|days| age < days)
+        }),
+    }
+}
+
+fn format_category(file: &ScannedFile) -> String {
+    format!("{:?}", file.category)
+}
+
+fn age_in_days(timestamp: &str) -> Option<u64> {
+    let date = timestamp.get(0..10)?;
+    let mut parts = date.split('-');
+    let year = parts.next()?.parse::<i64>().ok()?;
+    let month = parts.next()?.parse::<i64>().ok()?;
+    let day = parts.next()?.parse::<i64>().ok()?;
+    let days = days_from_civil(year, month, day)?;
+    let now = SystemTime::now().duration_since(UNIX_EPOCH).ok()?.as_secs() / 86_400;
+    Some(now.saturating_sub(days as u64))
+}
+
+fn days_from_civil(year: i64, month: i64, day: i64) -> Option<i64> {
+    if !(1..=12).contains(&month) || !(1..=31).contains(&day) {
+        return None;
+    }
+    let year = year - i64::from(month <= 2);
+    let era = year.div_euclid(400);
+    let year_of_era = year - era * 400;
+    let month_adjusted = month + if month > 2 { -3 } else { 9 };
+    let day_of_year = (153 * month_adjusted + 2) / 5 + day - 1;
+    let day_of_era = year_of_era * 365 + year_of_era / 4 - year_of_era / 100 + day_of_year;
+    Some(era * 146_097 + day_of_era - 719_468)
 }
 
 fn validate_destination(destination: &str) -> Result<(), AppError> {
@@ -221,6 +315,13 @@ mod tests {
         assert!(validate_rule(&screenshot_rule()).is_ok());
         let mut invalid = screenshot_rule();
         invalid.action.destination = "../Outside".to_string();
+        assert!(matches!(
+            validate_rule(&invalid),
+            Err(AppError::InvalidRule { .. })
+        ));
+
+        invalid = screenshot_rule();
+        invalid.action.action_type = RuleActionType::Rename;
         assert!(matches!(
             validate_rule(&invalid),
             Err(AppError::InvalidRule { .. })

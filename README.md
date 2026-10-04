@@ -10,11 +10,12 @@ The project currently contains:
 - Home, Organize, Rules, History, and Settings surfaces
 - Rust health/app-info commands plus a read-only first-layer scanner
 - A typed scan result with category counts, byte totals, protected-entry counts, and stable ordering
-- A centralized category catalog resource reserved for the configurable rules phase
+- A centralized category catalog and deterministic, locally persisted move rules
+- Enabled move rules are evaluated before category fallback when generating a plan
 - A typed Zustand UI store
 - A local-only visual language with plan-first safety messaging
 
-The current MVP scans only the selected folder's direct file children. It skips directories, hidden/system entries, symbolic links, and special files. Scanning reads metadata only; it never moves, renames, deletes, or overwrites user files.
+The current MVP scans only the selected folder's direct file children. It skips directories, hidden/system entries, symbolic links, and special files. Scanning reads metadata only; it never moves, renames, deletes, or overwrites user files. Saved rules can route matching files to safe relative folders; rename rules are intentionally rejected until rename semantics are implemented.
 
 ## Development
 

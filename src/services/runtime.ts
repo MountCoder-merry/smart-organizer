@@ -46,8 +46,8 @@ export async function scanFolder(root: string): Promise<ScanResult> {
   return invoke<ScanResult>("scan_folder", { root });
 }
 
-export async function generatePlan(root: string, scan: ScanResult): Promise<OrganizationPlan> {
-  return invoke<OrganizationPlan>("generate_plan", { root, scan });
+export async function generatePlan(root: string, scan: ScanResult, rules: StructuredRule[]): Promise<OrganizationPlan> {
+  return invoke<OrganizationPlan>("generate_plan", { root, scan, rules });
 }
 
 export async function applyPlan(plan: OrganizationPlan): Promise<ApplyResult> {
